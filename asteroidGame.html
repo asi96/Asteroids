@@ -29,6 +29,7 @@
         const LASER_MAX_AMOUNT = 10; // Maximum amount of lasers at the same time
         const LASER_SPEED = 500; // Speed of the laser rays in pixels per second
         const LASER_MAX_DISTANCE = 0.4; // The maximum distance a laser ray can travel before being removed in fraction of screen width
+        const LASER_EXPLOSION_DURATION = 0.1; // Duration of the explosion caused by laser hitting asteroids
 
         /** @type {HTMLCanvasElement} */
         var canvas = document.getElementById("game_container");
@@ -115,8 +116,8 @@
                 asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 8)));
                 asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 8)));
             }
-                // Destroy the hit asteroid
-                asteroids.splice(index, 1);
+            // Destroy the hit asteroid
+            asteroids.splice(index, 1);
         }
 
         function newSpaceShip() {
@@ -149,7 +150,8 @@
                     y: spaceship.y - 4 / 3 * spaceship.r * Math.sin(spaceship.a),
                     xv: LASER_SPEED * Math.cos(spaceship.a) / FPS,
                     yv: LASER_SPEED * Math.sin(spaceship.a) / FPS,
-                    distance: 0
+                    distance: 0,
+                    explosionTime: 0
                 })
             }
 
@@ -260,19 +262,19 @@
                     context.closePath();
                     context.stroke();
                 }
-                    // Blink effect handling
-                    if (spaceship.blinkNumber > 0) {
+                // Blink effect handling
+                if (spaceship.blinkNumber > 0) {
 
-                        // decrease blink time
-                        spaceship.blinkTime--;
+                    // decrease blink time
+                    spaceship.blinkTime--;
 
-                        // decrease the blink number
-                        if (spaceship.blinkTime == 0) {
+                    // decrease the blink number
+                    if (spaceship.blinkTime == 0) {
 
-                            spaceship.blinkTime = Math.ceil(SPACESHIP_BLINK_DURATION * FPS);
-                            spaceship.blinkNumber--;
-                        }
+                        spaceship.blinkTime = Math.ceil(SPACESHIP_BLINK_DURATION * FPS);
+                        spaceship.blinkNumber--;
                     }
+                }
             } else {
 
                 // Draw an explosion in the spaceships place
@@ -360,14 +362,14 @@
             if (!isExploding) {
                 if (spaceship.blinkNumber == 0) {
 
-                for (var i = 0; i < asteroids.length; i++) {
+                    for (var i = 0; i < asteroids.length; i++) {
 
-                    if (checkDistanceBetweenPoints(spaceship.x, spaceship.y, asteroids[i].x, asteroids[i].y) < spaceship.r + asteroids[i].r) {
-                        blowUpSpaceShip();
-                        destroyAsteroid(i);
+                        if (checkDistanceBetweenPoints(spaceship.x, spaceship.y, asteroids[i].x, asteroids[i].y) < spaceship.r + asteroids[i].r) {
+                            blowUpSpaceShip();
+                            destroyAsteroid(i);
+                        }
                     }
                 }
-            }
 
                 // Rotation
                 spaceship.a += spaceship.rotation;
@@ -404,18 +406,31 @@
 
                 // Remove the ray if it has reached the maximum distance
                 if (spaceship.laserRays[i].distance > LASER_MAX_DISTANCE * canvas.width) {
-                    
+
                     spaceship.laserRays.splice(i, 1);
                     continue;
                 }
-                
-                // move the laser rays
-                spaceship.laserRays[i].x += spaceship.laserRays[i].xv;
-                spaceship.laserRays[i].y -= spaceship.laserRays[i].yv;
 
-                // check distance travelled
-                spaceship.laserRays[i].distance += Math.sqrt(Math.pow(spaceship.laserRays[i].xv, 2) + Math.pow(spaceship.laserRays[i].yv, 2));
+                // handle explosion if active
+                if (spaceship.laserRays[i].explosionTime > 0) {
 
+                    spaceship.laserRays[i].explosionTime--;
+
+                    // destroy the laser after the explosion has finished
+                    if (spaceship.laserRays[i].explosionTime == 0) {
+
+                        spaceship.laserRays.splice(i, 1);
+                        continue;
+                    }
+
+                } else {
+                    // move the laser rays
+                    spaceship.laserRays[i].x += spaceship.laserRays[i].xv;
+                    spaceship.laserRays[i].y -= spaceship.laserRays[i].yv;
+
+                    // check distance travelled
+                    spaceship.laserRays[i].distance += Math.sqrt(Math.pow(spaceship.laserRays[i].xv, 2) + Math.pow(spaceship.laserRays[i].yv, 2));
+                }
                 // take care of rays going off screen
                 if (spaceship.laserRays[i].x < 0) {
                     spaceship.laserRays[i].x = canvas.width;
@@ -447,13 +462,11 @@
                     ly = spaceship.laserRays[j].y;
 
                     // check for hits
-                    if (checkDistanceBetweenPoints(ax, ay, lx, ly) < ar) {
+                    if (spaceship.laserRays[j].explosionTime == 0 && checkDistanceBetweenPoints(ax, ay, lx, ly) < ar) {
 
-                        // remove the laser ray
-                        spaceship.laserRays.splice(j, 1);
-
-                        // remove the hit asteroid
+                        // remove the hit asteroid and activate laser explosion
                         destroyAsteroid(i);
+                        spaceship.laserRays[j].explosionTime = Math.ceil(LASER_EXPLOSION_DURATION * FPS);
 
                         break;
                     }
@@ -486,11 +499,29 @@
 
             // Laser rays
             for (var i = 0; i < spaceship.laserRays.length; i++) {
-                
-                context.fillStyle = "salmon";
-                context.beginPath();
-                context.arc(spaceship.laserRays[i].x, spaceship.laserRays[i].y, SPACESHIP_SIZE / 15, 0, Math.PI / 2, false);
-                context.fill();
+
+                if (spaceship.laserRays[i].explosionTime == 0) {
+
+                    context.fillStyle = "salmon";
+                    context.beginPath();
+                    context.arc(spaceship.laserRays[i].x, spaceship.laserRays[i].y, SPACESHIP_SIZE / 15, 0, Math.PI * 2, false);
+                    context.fill();
+
+                } else {
+                    // Explosion is happening - draw it
+                    context.fillStyle = "orangered";
+                    context.beginPath();
+                    context.arc(spaceship.laserRays[i].x, spaceship.laserRays[i].y, spaceship.r / 0.75, 0, Math.PI * 2, false);
+                    context.fill();
+                    context.fillStyle = "salmon";
+                    context.beginPath();
+                    context.arc(spaceship.laserRays[i].x, spaceship.laserRays[i].y, spaceship.r / 0.5, 0, Math.PI * 2, false);
+                    context.fill();
+                    context.fillStyle = "pink";
+                    context.beginPath();
+                    context.arc(spaceship.laserRays[i].x, spaceship.laserRays[i].y, spaceship.r / 0.25, 0, Math.PI * 2, false);
+                    context.fill();
+                }
             }
         }
     </script>
