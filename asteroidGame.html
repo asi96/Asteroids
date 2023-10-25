@@ -24,8 +24,11 @@
         const ASTEROID_SIZE = 100;  // Size of each asteroid in pixels
         const ASTEROID_VERTICES = 10; // Roughly average number of vertices on each asteroid spawned
         const ASTEROID_RANDOMNESS = 0.4; // The randomness of each asteroids shape - higher value more interesting shapes
-        const SHOW_CENTER_CIRCLE = true; // Toggle showing the red center circle for debugging purposes
+        const SHOW_CENTER_CIRCLE = false; // Toggle showing the red center circle for debugging purposes
         const SHOW_BOUNDING_BOXES = false; // Toggle showing the collision boxes for objects
+        const LASER_MAX_AMOUNT = 10; // Maximum amount of lasers at the same time
+        const LASER_SPEED = 500; // Speed of the laser rays in pixels per second
+        const LASER_MAX_DISTANCE = 0.4; // The maximum distance a laser ray can travel before being removed in fraction of screen width
 
         /** @type {HTMLCanvasElement} */
         var canvas = document.getElementById("game_container");
@@ -57,7 +60,7 @@
                     x = Math.floor(Math.random() * canvas.width);
                     y = Math.floor(Math.random() * canvas.height);
                 } while (checkDistanceBetweenPoints(spaceship.x, spaceship.y, x, y) < ASTEROID_SIZE * 2 + spaceship.r);
-                asteroids.push(newAsteroid(x, y));
+                asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 2)));
             }
         }
 
@@ -74,13 +77,13 @@
             spaceship.explosionTime = Math.ceil(SPACESHIP_EXPLOSION_DURATION * FPS);
         }
 
-        function newAsteroid(x, y) {
+        function newAsteroid(x, y, r) {
             var asteroid = {
                 x: x,
                 y: y,
                 xv: Math.random() * ASTEROID_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1),
                 yv: Math.random() * ASTEROID_SPEED / FPS * (Math.random() < 0.5 ? 1 : -1),
-                r: ASTEROID_SIZE / 2,
+                r: r,
                 a: Math.random() * Math.PI * 2, // converted to radians
                 randVertices: Math.floor(Math.random() * (ASTEROID_VERTICES + 1) + ASTEROID_VERTICES / 2),
                 offset: []
@@ -93,6 +96,27 @@
             }
 
             return asteroid;
+        }
+
+        function destroyAsteroid(index) {
+
+            var x = asteroids[index].x;
+            var y = asteroids[index].y;
+            var r = asteroids[index].r;
+
+            // split the asteroid into a smaller pieces depending on its size
+            if (r == Math.ceil(ASTEROID_SIZE / 2)) {
+
+                asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 4)));
+                asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 4)));
+
+            } else if (r == Math.ceil(ASTEROID_SIZE / 4)) {
+
+                asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 8)));
+                asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 8)));
+            }
+                // Destroy the hit asteroid
+                asteroids.splice(index, 1);
         }
 
         function newSpaceShip() {
@@ -110,13 +134,36 @@
                 },
                 explosionTime: 0,
                 blinkTime: Math.ceil(SPACESHIP_BLINK_DURATION * FPS),
-                blinkNumber: Math.ceil(SPACESHIP_INVULNERABILITY_DURATION / SPACESHIP_BLINK_DURATION)
+                blinkNumber: Math.ceil(SPACESHIP_INVULNERABILITY_DURATION / SPACESHIP_BLINK_DURATION),
+                shootAllowed: true,
+                laserRays: []
             }
+        }
+
+        function fireLasers() {
+
+            // Create a laser ray
+            if (spaceship.shootAllowed && spaceship.laserRays.length < LASER_MAX_AMOUNT) {
+                spaceship.laserRays.push({
+                    x: spaceship.x + 4 / 3 * spaceship.r * Math.cos(spaceship.a),
+                    y: spaceship.y - 4 / 3 * spaceship.r * Math.sin(spaceship.a),
+                    xv: LASER_SPEED * Math.cos(spaceship.a) / FPS,
+                    yv: LASER_SPEED * Math.sin(spaceship.a) / FPS,
+                    distance: 0
+                })
+            }
+
+            // Prevent another laser from firing before spacebar is released
+            spaceship.shootAllowed = false;
+
         }
 
         function keyDownPressed(/** @type {KeyBoardEvent} */ event) {
 
             switch (event.keyCode) {
+                case 32: // spacebar pressed down - shoot lasers
+                    fireLasers();
+                    break;
                 case 37: // left arrow key pressed - rotate left
                     spaceship.rotation = SPACESHIP_TURN_SPEED / 180 * Math.PI / FPS;
                     break;
@@ -132,6 +179,9 @@
         function keyUpPressed(/** @type {KeyBoardEvent} */ event) {
 
             switch (event.keyCode) {
+                case 32: // spacebar released (allow to shoot again)
+                    spaceship.shootAllowed = true;
+                    break;
                 case 37: // left arrow key not pressed anymore - stop rotating left
                     spaceship.rotation = 0;
                     break;
@@ -314,6 +364,7 @@
 
                     if (checkDistanceBetweenPoints(spaceship.x, spaceship.y, asteroids[i].x, asteroids[i].y) < spaceship.r + asteroids[i].r) {
                         blowUpSpaceShip();
+                        destroyAsteroid(i);
                     }
                 }
             }
@@ -348,6 +399,67 @@
                 spaceship.y = 0 - spaceship.r;
             }
 
+            // move the laser rays
+            for (var i = spaceship.laserRays.length - 1; i >= 0; i--) {
+
+                // Remove the ray if it has reached the maximum distance
+                if (spaceship.laserRays[i].distance > LASER_MAX_DISTANCE * canvas.width) {
+                    
+                    spaceship.laserRays.splice(i, 1);
+                    continue;
+                }
+                
+                // move the laser rays
+                spaceship.laserRays[i].x += spaceship.laserRays[i].xv;
+                spaceship.laserRays[i].y -= spaceship.laserRays[i].yv;
+
+                // check distance travelled
+                spaceship.laserRays[i].distance += Math.sqrt(Math.pow(spaceship.laserRays[i].xv, 2) + Math.pow(spaceship.laserRays[i].yv, 2));
+
+                // take care of rays going off screen
+                if (spaceship.laserRays[i].x < 0) {
+                    spaceship.laserRays[i].x = canvas.width;
+                } else if (spaceship.laserRays[i].x > canvas.width) {
+                    spaceship.laserRays[i].x = 0;
+                }
+                if (spaceship.laserRays[i].y < 0) {
+                    spaceship.laserRays[i].y = canvas.height;
+                } else if (spaceship.laserRays[i].y > canvas.height) {
+                    spaceship.laserRays[i].y = 0;
+                }
+            }
+
+            // check if laser rays hit asteroids
+            var ax, ay, ar, lx, ly;
+
+            for (var i = asteroids.length - 1; i >= 0; i--) {
+
+                // store the values in the variables
+                ax = asteroids[i].x;
+                ay = asteroids[i].y;
+                ar = asteroids[i].r;
+
+                // loop through the laser rays
+                for (var j = spaceship.laserRays.length - 1; j >= 0; j--) {
+
+                    // store the laser values in the variables
+                    lx = spaceship.laserRays[j].x;
+                    ly = spaceship.laserRays[j].y;
+
+                    // check for hits
+                    if (checkDistanceBetweenPoints(ax, ay, lx, ly) < ar) {
+
+                        // remove the laser ray
+                        spaceship.laserRays.splice(j, 1);
+
+                        // remove the hit asteroid
+                        destroyAsteroid(i);
+
+                        break;
+                    }
+                }
+            }
+
             // move the asteroids
             for (var i = 0; i < asteroids.length; i++) {
                 asteroids[i].x += asteroids[i].xv;
@@ -370,6 +482,15 @@
             if (SHOW_CENTER_CIRCLE) {
                 context.fillStyle = "red";
                 context.fillRect(spaceship.x - 1, spaceship.y - 1, 2, 2);
+            }
+
+            // Laser rays
+            for (var i = 0; i < spaceship.laserRays.length; i++) {
+                
+                context.fillStyle = "salmon";
+                context.beginPath();
+                context.arc(spaceship.laserRays[i].x, spaceship.laserRays[i].y, SPACESHIP_SIZE / 15, 0, Math.PI / 2, false);
+                context.fill();
             }
         }
     </script>
