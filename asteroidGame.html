@@ -159,7 +159,7 @@
                 spaceship.thrust.y -= SPACESHIP_THRUST * Math.sin(spaceship.a) / FPS;
 
                 // add graphical thrusting to the spaceship
-                if (!isExploding) {
+                if (!isExploding && isBlinkOn) {
                     context.fillStyle = "red";
                     context.strokeStyle = "yellow";
                     context.lineWidth = SPACESHIP_SIZE / 10;
