@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Asteroids in JavaScript</title>
+    <style></style>
+</head>
+
+<body>
+    <canvas id="game_container" width="800" height="700"></canvas>
+    <script>
+        const FPS = 30; // default standard framerate
+        const SPACESHIP_SIZE = 30; // spaceship size in pixels
+        const SPACESHIP_TURN_SPEED = 360; // spaceship turn speed in degrees
+        const SPACESHIP_THRUST = 5; // spaceship thrust acceleration
+        const SPACESHIP_FRICTION = 0.7; // spaceship friction coefficient of space (0 = no friction, 1 = lots of friction)
+
+        /** @type {HTMLCanvasElement} */
+        var canvas = document.getElementById("game_container");
+        var context = canvas.getContext("2d");
+
+        var spaceship = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            r: SPACESHIP_SIZE / 2,
+            a: 90 / 180 * Math.PI, // radian conversion
+            rotation: 0,
+            isThrusting: false,
+            thrust: {
+                x: 0,
+                y: 0
+            }
+        }
+
+        // Event Handlers
+        document.addEventListener("keydown", keyDownPressed);
+        document.addEventListener("keyup", keyUpPressed);
+
+        // Define the game loop and speed
+        setInterval(update, 1000 / FPS);
+
+        function keyDownPressed(/** @type {KeyBoardEvent} */ event) {
+
+            switch(event.keyCode) {
+                case 37: // left arrow key pressed - rotate left
+                    spaceship.rotation = SPACESHIP_TURN_SPEED / 180 * Math.PI / FPS;
+                    break;
+                case 38: // up arrow key pressed - move ship forward
+                    spaceship.isThrusting = true;
+                    break;
+                case 39: // right arrow key pressed - rotate right
+                    spaceship.rotation = -SPACESHIP_TURN_SPEED / 180 * Math.PI / FPS;
+                    break;
+                case 40:
+
+                    break;
+            }
+        }
+
+        function keyUpPressed(/** @type {KeyBoardEvent} */ event) {
+            
+            switch(event.keyCode) {
+                case 37: // left arrow key not pressed anymore - stop rotating left
+                    spaceship.rotation = 0;
+                    break;
+                case 38: // up arrow key not pressed anymore - stop ship moving forward
+                    spaceship.isThrusting = false;
+                case 39: // right arrow key not pressed anymore - stop rotating right
+                    spaceship.rotation = 0;
+                    break;
+                case 40:
+
+                    break;
+            }
+        }
+
+        // Update function that will run every frame
+        function update() {
+            
+            // Background
+            context.fillStyle = "black";
+            context.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Spaceship thrusting
+            if (spaceship.isThrusting) {
+                spaceship.thrust.x += SPACESHIP_THRUST * Math.cos(spaceship.a) / FPS;
+                spaceship.thrust.y -= SPACESHIP_THRUST * Math.sin(spaceship.a) / FPS;
+
+                // add graphical thrusting to the spaceship
+                context.fillStyle = "red";
+                context.strokeStyle = "yellow";
+                context.lineWidth = SPACESHIP_SIZE / 10;
+                context.beginPath();
+                context.moveTo( // starting at the rear left of the thruster
+                    spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) + 0.5 * Math.sin(spaceship.a)),
+                    spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) - 0.5 * Math.cos(spaceship.a))
+                );
+                context.lineTo( // rear centre behind the ship
+                    spaceship.x - spaceship.r * 6 / 3 * Math.cos(spaceship.a),
+                    spaceship.y + spaceship.r * 6 / 3 * Math.sin(spaceship.a)
+                );
+                context.lineTo( // draw line to bottom right corner
+                    spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) - 0.5 * Math.sin(spaceship.a)),
+                    spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) + 0.5 * Math.cos(spaceship.a))
+                );
+                // Use closePath to automatically close the triangle
+                context.closePath();
+                context.fill();
+                context.stroke();
+
+            } else {
+                // Friction takes over since the ship is no longer thrusting
+                spaceship.thrust.x -= SPACESHIP_FRICTION * spaceship.thrust.x / FPS;
+                spaceship.thrust.y -= SPACESHIP_FRICTION * spaceship.thrust.y / FPS;
+            }
+
+            // Spaceship
+            context.strokeStyle = "white";
+            context.lineWidth = SPACESHIP_SIZE / 20;
+            context.beginPath();
+            context.moveTo( // starting at the top of the ship
+                spaceship.x + 4 / 3 * spaceship.r * Math.cos(spaceship.a),
+                spaceship.y - 4 / 3 * spaceship.r * Math.sin(spaceship.a)
+            );
+            context.lineTo( // draw line to bottom left corner
+                spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) + Math.sin(spaceship.a)),
+                spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) - Math.cos(spaceship.a))
+            );
+            context.lineTo( // draw line to bottom right corner
+                spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) - Math.sin(spaceship.a)),
+                spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) + Math.cos(spaceship.a))
+            );
+            // Use closePath to automatically close the triangle
+            context.closePath();
+            context.stroke();
+
+            // Rotation
+            spaceship.a += spaceship.rotation;
+
+            // Movement
+            spaceship.x += spaceship.thrust.x;
+            spaceship.y += spaceship.thrust.y;
+
+            // Prevent ship flying off bounds
+            if (spaceship.x < 0 - spaceship.r) {
+                spaceship.x = canvas.width + spaceship.r;
+            } else if (spaceship.x > canvas.width + spaceship.r) {
+                spaceship.x = 0 - spaceship.r;
+            }
+
+            if (spaceship.y < 0 - spaceship.r) {
+                spaceship.y = canvas.height + spaceship.r;
+            } else if (spaceship.y > canvas.height + spaceship.r) {
+                spaceship.y = 0 - spaceship.r;
+            }
+
+            // Center of spaceship
+            context.fillStyle = "red";
+            context.fillRect(spaceship.x - 1, spaceship.y - 1, 2, 2);
+        }
+    </script>
+</body>
+
+</html>
