@@ -16,7 +16,9 @@
         const SPACESHIP_TURN_SPEED = 360; // spaceship turn speed in degrees
         const SPACESHIP_THRUST = 5; // spaceship thrust acceleration
         const SPACESHIP_FRICTION = 0.7; // spaceship friction coefficient of space (0 = no friction, 1 = lots of friction)
-        const SPACESHIP_EXPLOSION_DURATION = 2; // Duration of the ship exploding in seconds
+        const SPACESHIP_EXPLOSION_DURATION = 0.3; // Duration of the ship exploding in seconds
+        const SPACESHIP_BLINK_DURATION = 0.1; // Duration of the ships blinks during invulnerability
+        const SPACESHIP_INVULNERABILITY_DURATION = 3; // Duration of the ships invulnerability in seconds after respawning
         const ASTEROID_AMOUNT = 8; // Amount of asteroids in the game
         const ASTEROID_SPEED = 50; // Max speed at the start for each asteroid in pixels per second
         const ASTEROID_SIZE = 100;  // Size of each asteroid in pixels
@@ -44,7 +46,7 @@
         setInterval(update, 1000 / FPS);
 
         function createAsteroids() {
-            
+
             // clear out any old asteroids
             asteroids = [];
             var x, y;
@@ -55,14 +57,14 @@
                     x = Math.floor(Math.random() * canvas.width);
                     y = Math.floor(Math.random() * canvas.height);
                 } while (checkDistanceBetweenPoints(spaceship.x, spaceship.y, x, y) < ASTEROID_SIZE * 2 + spaceship.r);
-                asteroids.push(newAsteroid(x,y));
+                asteroids.push(newAsteroid(x, y));
             }
         }
 
         function checkDistanceBetweenPoints(x1, y1, x2, y2) {
 
             // Enforces a certain buffer zone around the spaceship to prevent asteroids spawning ontop
-            return Math.sqrt(Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2));
+            return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
         }
 
 
@@ -86,7 +88,7 @@
 
             // create the offset to cause random shapes
             for (var i = 0; i < asteroid.randVertices; i++) {
-                
+
                 asteroid.offset.push(Math.random() * ASTEROID_RANDOMNESS * 2 + 1 - ASTEROID_RANDOMNESS);
             }
 
@@ -94,7 +96,7 @@
         }
 
         function newSpaceShip() {
-            
+
             return {
                 x: canvas.width / 2,
                 y: canvas.height / 2,
@@ -106,13 +108,15 @@
                     x: 0,
                     y: 0
                 },
-                explosionTime: 0
+                explosionTime: 0,
+                blinkTime: Math.ceil(SPACESHIP_BLINK_DURATION * FPS),
+                blinkNumber: Math.ceil(SPACESHIP_INVULNERABILITY_DURATION / SPACESHIP_BLINK_DURATION)
             }
         }
 
         function keyDownPressed(/** @type {KeyBoardEvent} */ event) {
 
-            switch(event.keyCode) {
+            switch (event.keyCode) {
                 case 37: // left arrow key pressed - rotate left
                     spaceship.rotation = SPACESHIP_TURN_SPEED / 180 * Math.PI / FPS;
                     break;
@@ -126,8 +130,8 @@
         }
 
         function keyUpPressed(/** @type {KeyBoardEvent} */ event) {
-            
-            switch(event.keyCode) {
+
+            switch (event.keyCode) {
                 case 37: // left arrow key not pressed anymore - stop rotating left
                     spaceship.rotation = 0;
                     break;
@@ -143,7 +147,8 @@
         function update() {
 
             var isExploding = spaceship.explosionTime > 0;
-            
+            var isBlinkOn = spaceship.blinkNumber % 2 == 0;
+
             // Background
             context.fillStyle = "black";
             context.fillRect(0, 0, canvas.width, canvas.height);
@@ -185,25 +190,39 @@
 
             // Spaceship
             if (!isExploding) {
-            context.strokeStyle = "white";
-            context.lineWidth = SPACESHIP_SIZE / 20;
-            context.beginPath();
-            context.moveTo( // starting at the top of the ship
-                spaceship.x + 4 / 3 * spaceship.r * Math.cos(spaceship.a),
-                spaceship.y - 4 / 3 * spaceship.r * Math.sin(spaceship.a)
-            );
-            context.lineTo( // draw line to bottom left corner
-                spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) + Math.sin(spaceship.a)),
-                spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) - Math.cos(spaceship.a))
-            );
-            context.lineTo( // draw line to bottom right corner
-                spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) - Math.sin(spaceship.a)),
-                spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) + Math.cos(spaceship.a))
-            );
-            // Use closePath to automatically close the triangle
-            context.closePath();
-            context.stroke();
-            
+                if (isBlinkOn) {
+                    context.strokeStyle = "white";
+                    context.lineWidth = SPACESHIP_SIZE / 20;
+                    context.beginPath();
+                    context.moveTo( // starting at the top of the ship
+                        spaceship.x + 4 / 3 * spaceship.r * Math.cos(spaceship.a),
+                        spaceship.y - 4 / 3 * spaceship.r * Math.sin(spaceship.a)
+                    );
+                    context.lineTo( // draw line to bottom left corner
+                        spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) + Math.sin(spaceship.a)),
+                        spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) - Math.cos(spaceship.a))
+                    );
+                    context.lineTo( // draw line to bottom right corner
+                        spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) - Math.sin(spaceship.a)),
+                        spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) + Math.cos(spaceship.a))
+                    );
+                    // Use closePath to automatically close the triangle
+                    context.closePath();
+                    context.stroke();
+                }
+                    // Blink effect handling
+                    if (spaceship.blinkNumber > 0) {
+
+                        // decrease blink time
+                        spaceship.blinkTime--;
+
+                        // decrease the blink number
+                        if (spaceship.blinkTime == 0) {
+
+                            spaceship.blinkTime = Math.ceil(SPACESHIP_BLINK_DURATION * FPS);
+                            spaceship.blinkNumber--;
+                        }
+                    }
             } else {
 
                 // Draw an explosion in the spaceships place
@@ -289,20 +308,22 @@
 
             // Check for collisions
             if (!isExploding) {
+                if (spaceship.blinkNumber == 0) {
 
-            for (var i = 0; i < asteroids.length; i++) {
-                
-                if (checkDistanceBetweenPoints(spaceship.x, spaceship.y, asteroids[i].x, asteroids[i].y) < spaceship.r + asteroids[i].r) {
-                    blowUpSpaceShip();
+                for (var i = 0; i < asteroids.length; i++) {
+
+                    if (checkDistanceBetweenPoints(spaceship.x, spaceship.y, asteroids[i].x, asteroids[i].y) < spaceship.r + asteroids[i].r) {
+                        blowUpSpaceShip();
+                    }
                 }
             }
 
-            // Rotation
-            spaceship.a += spaceship.rotation;
+                // Rotation
+                spaceship.a += spaceship.rotation;
 
-            // Movement
-            spaceship.x += spaceship.thrust.x;
-            spaceship.y += spaceship.thrust.y;
+                // Movement
+                spaceship.x += spaceship.thrust.x;
+                spaceship.y += spaceship.thrust.y;
 
             } else {
 
@@ -329,8 +350,8 @@
 
             // move the asteroids
             for (var i = 0; i < asteroids.length; i++) {
-            asteroids[i].x += asteroids[i].xv;
-            asteroids[i].y += asteroids[i].yv;
+                asteroids[i].x += asteroids[i].xv;
+                asteroids[i].y += asteroids[i].yv;
 
                 // prevent the asteroid from disappearing going outside the screen
                 if (asteroids[i].x < 0 - asteroids[i].r) {
@@ -347,8 +368,8 @@
             }
             // Center of spaceship
             if (SHOW_CENTER_CIRCLE) {
-            context.fillStyle = "red";
-            context.fillRect(spaceship.x - 1, spaceship.y - 1, 2, 2);
+                context.fillStyle = "red";
+                context.fillRect(spaceship.x - 1, spaceship.y - 1, 2, 2);
             }
         }
     </script>
