@@ -37,6 +37,8 @@
         const SCORE_MEDIUM = 50; // Score rewarded for hitting a medium asteroid
         const SCORE_SMALL = 100; // Score rewarded for hitting a small asteroid
         const SAVE_KEY_SCORE = "highscore"; // Persist the highscore if user closes the window
+        const SOUND_ACTIVE = true; // Whether sound should be played
+        const MUSIC_ACTIVE = true; // Whether music should be played
 
         /** @type {HTMLCanvasElement} */
         var canvas = document.getElementById("game_container");
@@ -44,6 +46,16 @@
 
         // setup variables for the game logic
         var level, asteroids, spaceship, text, textalpha, lives, gamescore, highscore;
+
+        // import sound files
+        var aLaser = new GameSound("gamesounds/laser.m4a", 5, 0.5);
+        var aLaserHit = new GameSound("gamesounds/hit.m4a", 5);
+        var aExplode = new GameSound("gamesounds/explode.m4a", 1, 0.8);
+        var aThrust = new GameSound("gamesounds/thrust.m4a", 1, 0.5);
+
+        // import background music
+        var gamemusic = new GameMusic("gamesounds/music-low.m4a", "gamesounds/music-high.m4a");
+        var asteroidsRemaining, asteroidsTotal;
 
         startNewGame();
 
@@ -59,6 +71,8 @@
             // clear out any old asteroids
             asteroids = [];
             var x, y;
+            asteroidsTotal = (ASTEROID_AMOUNT + level) * 7;
+            asteroidsRemaining = asteroidsTotal;
 
             for (var i = 0; i < ASTEROID_AMOUNT + level; i++) {
                 // Add a bit of randomness to each asteroid postion spawning in
@@ -81,6 +95,7 @@
 
             // Make a big explosion on the ship whenever a collision is detected
             spaceship.explosionTime = Math.ceil(SPACESHIP_EXPLOSION_DURATION * FPS);
+            aExplode.play();
         }
 
         function newAsteroid(x, y, r) {
@@ -139,6 +154,11 @@
 
             // Destroy the hit asteroid
             asteroids.splice(index, 1);
+            aLaserHit.play();
+
+            // Find the ratio of asteroids left to determine music beat speed
+            asteroidsRemaining--;
+            gamemusic.setAsteroidBeatRatio(asteroidsRemaining == 0 ? 1 : asteroidsRemaining / asteroidsTotal);
 
             // Check if its the last asteroid - then start a new level
             if (asteroids.length == 0) {
@@ -179,6 +199,7 @@
             spaceship.dead = true;
             text = "Game Over";
             textalpha = 1.0;
+            gamemusic.speed = 1.0;
         }
 
         function newSpaceShip() {
@@ -236,7 +257,8 @@
                     yv: LASER_SPEED * Math.sin(spaceship.a) / FPS,
                     distance: 0,
                     explosionTime: 0
-                })
+                });
+                aLaser.play();
             }
 
             // Prevent another laser from firing before spacebar is released
@@ -289,11 +311,78 @@
             }
         }
 
+        // Own function to play multiple sounds at once
+        function GameSound(source, maxAllowedSounds = 1, vol = 1) {
+
+            this.streamNumber = 0;
+            this.streams = [];
+
+            for (var i = 0; i < maxAllowedSounds; i++) {
+
+                this.streams.push(new Audio(source));
+                this.streams[i].volume = vol;
+            }
+
+            this.play = function () {
+
+                if (SOUND_ACTIVE) {
+                    this.streamNumber = (this.streamNumber + 1) % maxAllowedSounds;
+                    this.streams[this.streamNumber].play();
+                }
+            }
+
+            this.stop = function () {
+
+                this.streams[this.streamNumber].pause();
+                this.streams[this.streamNumber].currentTime = 0;
+            }
+        }
+
+        // Own function to switch between two sounds for the background music
+        function GameMusic(source1, source2) {
+
+            this.sound1 = new Audio(source1);
+            this.sound2 = new Audio(source2);
+            this.soundOnePlaying = true;
+            this.speed = 1.0; // beats per second
+            this.beatTime = 0; // pause between beats in frames
+
+            this.play = function () {
+
+                if (MUSIC_ACTIVE) {
+                    if (this.soundOnePlaying) {
+                        this.sound1.play();
+                    } else {
+                        this.sound2.play();
+                    }
+                    this.soundOnePlaying = !this.soundOnePlaying;
+                }
+            }
+
+            this.musicTick = function () {
+
+                if (this.beatTime == 0) {
+                    this.play();
+                    this.beatTime = Math.ceil(this.speed * FPS);
+                } else {
+                    this.beatTime--;
+                }
+            }
+
+            this.setAsteroidBeatRatio = function (beatRatio) {
+
+                this.speed = 1.0 - 0.75 * (1.0 - beatRatio);
+            }
+        }
+
         // Update function that will run every frame
         function update() {
 
             var isExploding = spaceship.explosionTime > 0;
             var isBlinkOn = spaceship.blinkNumber % 2 == 0;
+
+            // Tick the game music forward
+            gamemusic.musicTick();
 
             // Background
             context.fillStyle = "black";
@@ -303,6 +392,7 @@
             if (spaceship.isThrusting && !spaceship.dead) {
                 spaceship.thrust.x += SPACESHIP_THRUST * Math.cos(spaceship.a) / FPS;
                 spaceship.thrust.y -= SPACESHIP_THRUST * Math.sin(spaceship.a) / FPS;
+                aThrust.play();
 
                 // add graphical thrusting to the spaceship
                 if (!isExploding && isBlinkOn) {
@@ -332,6 +422,7 @@
                 // Friction takes over since the ship is no longer thrusting
                 spaceship.thrust.x -= SPACESHIP_FRICTION * spaceship.thrust.x / FPS;
                 spaceship.thrust.y -= SPACESHIP_FRICTION * spaceship.thrust.y / FPS;
+                aThrust.stop();
             }
 
             // Spaceship
