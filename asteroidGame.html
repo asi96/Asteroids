@@ -33,13 +33,17 @@
         const LASER_EXPLOSION_DURATION = 0.1; // Duration of the explosion caused by laser hitting asteroids
         const TEXT_FADE_DURATION = 2.5; // Duration of the fade effect in seconds
         const TEXT_FONT_SIZE = 40; // Size of the text font size in pixels
+        const SCORE_LARGE = 20; // Score rewarded for hitting a large asteroid
+        const SCORE_MEDIUM = 50; // Score rewarded for hitting a medium asteroid
+        const SCORE_SMALL = 100; // Score rewarded for hitting a small asteroid
+        const SAVE_KEY_SCORE = "highscore"; // Persist the highscore if user closes the window
 
         /** @type {HTMLCanvasElement} */
         var canvas = document.getElementById("game_container");
         var context = canvas.getContext("2d");
 
         // setup variables for the game logic
-        var level, asteroids, spaceship, text, textalpha, lives;
+        var level, asteroids, spaceship, text, textalpha, lives, gamescore, highscore;
 
         startNewGame();
 
@@ -114,12 +118,25 @@
 
                 asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 4)));
                 asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 4)));
+                gamescore += SCORE_LARGE;
 
             } else if (r == Math.ceil(ASTEROID_SIZE / 4)) {
 
                 asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 8)));
                 asteroids.push(newAsteroid(x, y, Math.ceil(ASTEROID_SIZE / 8)));
+                gamescore += SCORE_MEDIUM;
+
+            } else {
+                gamescore += SCORE_SMALL;
             }
+
+            // Check if the current gamescore is a highscore
+            if (gamescore > highscore) {
+
+                highscore = gamescore;
+                localStorage.setItem(SAVE_KEY_SCORE, highscore);
+            }
+
             // Destroy the hit asteroid
             asteroids.splice(index, 1);
 
@@ -134,6 +151,16 @@
         function startNewGame() {
 
             lives = PLAYER_LIVES;
+            gamescore = 0;
+
+            // Check if theres a saved highscore - if not then 0
+            var localHighscore = localStorage.getItem(SAVE_KEY_SCORE);
+            if (localHighscore == null) {
+                highscore = 0;
+            } else {
+                highscore = parseInt(localHighscore);
+            }
+
             level = 0;
             spaceship = newSpaceShip();
             createNewLevel();
@@ -516,6 +543,20 @@
                 // Start a new game automatically
                 startNewGame();
             }
+
+            // Show the current score the player has
+            context.textAlign = "right";
+            context.textBaseline = "middle";
+            context.fillStyle = "white";
+            context.font = TEXT_FONT_SIZE + "px dejavu sans mono";
+            context.fillText(gamescore, canvas.width - SPACESHIP_SIZE / 2, SPACESHIP_SIZE);
+
+            // Show the current highscore the player has
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillStyle = "white";
+            context.font = (TEXT_FONT_SIZE * 0.75) + "px dejavu sans mono";
+            context.fillText("BEST: " + highscore, canvas.width / 2, SPACESHIP_SIZE);
 
             // Show the amount of lives left the player has
             var colourLife;
