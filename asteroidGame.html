@@ -12,6 +12,7 @@
     <script>
         // Create constants needed for the game
         const FPS = 30; // default standard framerate
+        const PLAYER_LIVES = 3; // Amount of lives a player has before game over
         const SPACESHIP_SIZE = 30; // spaceship size in pixels
         const SPACESHIP_TURN_SPEED = 360; // spaceship turn speed in degrees
         const SPACESHIP_THRUST = 5; // spaceship thrust acceleration
@@ -38,7 +39,7 @@
         var context = canvas.getContext("2d");
 
         // setup variables for the game logic
-        var level, asteroids, spaceship, text, textalpha;
+        var level, asteroids, spaceship, text, textalpha, lives;
 
         startNewGame();
 
@@ -124,7 +125,7 @@
 
             // Check if its the last asteroid - then start a new level
             if (asteroids.length == 0) {
-                
+
                 level++;
                 createNewLevel();
             }
@@ -132,6 +133,7 @@
 
         function startNewGame() {
 
+            lives = PLAYER_LIVES;
             level = 0;
             spaceship = newSpaceShip();
             createNewLevel();
@@ -143,6 +145,13 @@
             textalpha = 1.0;
 
             createAsteroids();
+        }
+
+        function gameOver() {
+
+            spaceship.dead = true;
+            text = "Game Over";
+            textalpha = 1.0;
         }
 
         function newSpaceShip() {
@@ -162,8 +171,31 @@
                 blinkTime: Math.ceil(SPACESHIP_BLINK_DURATION * FPS),
                 blinkNumber: Math.ceil(SPACESHIP_INVULNERABILITY_DURATION / SPACESHIP_BLINK_DURATION),
                 shootAllowed: true,
-                laserRays: []
+                laserRays: [],
+                dead: false
             }
+        }
+
+        function drawTriangularShip(x, y, a, colour = "white") {
+
+            context.strokeStyle = colour;
+            context.lineWidth = SPACESHIP_SIZE / 20;
+            context.beginPath();
+            context.moveTo( // starting at the top of the ship
+                x + 4 / 3 * spaceship.r * Math.cos(a),
+                y - 4 / 3 * spaceship.r * Math.sin(a)
+            );
+            context.lineTo( // draw line to bottom left corner
+                x - spaceship.r * (2 / 3 * Math.cos(a) + Math.sin(a)),
+                y + spaceship.r * (2 / 3 * Math.sin(a) - Math.cos(a))
+            );
+            context.lineTo( // draw line to bottom right corner
+                x - spaceship.r * (2 / 3 * Math.cos(a) - Math.sin(a)),
+                y + spaceship.r * (2 / 3 * Math.sin(a) + Math.cos(a))
+            );
+            // Use closePath to automatically close the triangle
+            context.closePath();
+            context.stroke();
         }
 
         function fireLasers() {
@@ -187,6 +219,11 @@
 
         function keyDownPressed(/** @type {KeyBoardEvent} */ event) {
 
+            // Prevent a dead player from controlling
+            if (spaceship.dead) {
+                return;
+            }
+
             switch (event.keyCode) {
                 case 32: // spacebar pressed down - shoot lasers
                     fireLasers();
@@ -204,6 +241,11 @@
         }
 
         function keyUpPressed(/** @type {KeyBoardEvent} */ event) {
+
+            // Prevent a dead player from controlling
+            if (spaceship.dead) {
+                return;
+            }
 
             switch (event.keyCode) {
                 case 32: // spacebar released (allow to shoot again)
@@ -231,7 +273,7 @@
             context.fillRect(0, 0, canvas.width, canvas.height);
 
             // Spaceship thrusting
-            if (spaceship.isThrusting) {
+            if (spaceship.isThrusting && !spaceship.dead) {
                 spaceship.thrust.x += SPACESHIP_THRUST * Math.cos(spaceship.a) / FPS;
                 spaceship.thrust.y -= SPACESHIP_THRUST * Math.sin(spaceship.a) / FPS;
 
@@ -267,25 +309,9 @@
 
             // Spaceship
             if (!isExploding) {
-                if (isBlinkOn) {
-                    context.strokeStyle = "white";
-                    context.lineWidth = SPACESHIP_SIZE / 20;
-                    context.beginPath();
-                    context.moveTo( // starting at the top of the ship
-                        spaceship.x + 4 / 3 * spaceship.r * Math.cos(spaceship.a),
-                        spaceship.y - 4 / 3 * spaceship.r * Math.sin(spaceship.a)
-                    );
-                    context.lineTo( // draw line to bottom left corner
-                        spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) + Math.sin(spaceship.a)),
-                        spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) - Math.cos(spaceship.a))
-                    );
-                    context.lineTo( // draw line to bottom right corner
-                        spaceship.x - spaceship.r * (2 / 3 * Math.cos(spaceship.a) - Math.sin(spaceship.a)),
-                        spaceship.y + spaceship.r * (2 / 3 * Math.sin(spaceship.a) + Math.cos(spaceship.a))
-                    );
-                    // Use closePath to automatically close the triangle
-                    context.closePath();
-                    context.stroke();
+                if (isBlinkOn && !spaceship.dead) {
+
+                    drawTriangularShip(spaceship.x, spaceship.y, spaceship.a);
                 }
                 // Blink effect handling
                 if (spaceship.blinkNumber > 0) {
@@ -385,13 +411,14 @@
 
             // Check for collisions
             if (!isExploding) {
-                if (spaceship.blinkNumber == 0) {
+                if (spaceship.blinkNumber == 0 && !spaceship.dead) {
 
                     for (var i = 0; i < asteroids.length; i++) {
 
                         if (checkDistanceBetweenPoints(spaceship.x, spaceship.y, asteroids[i].x, asteroids[i].y) < spaceship.r + asteroids[i].r) {
                             blowUpSpaceShip();
                             destroyAsteroid(i);
+                            break;
                         }
                     }
                 }
@@ -409,7 +436,14 @@
                 spaceship.explosionTime--;
 
                 if (spaceship.explosionTime == 0) {
-                    spaceship = newSpaceShip();
+
+                    lives--;
+
+                    if (lives == 0) {
+                        gameOver();
+                    } else {
+                        spaceship = newSpaceShip();
+                    }
                 }
             }
 
@@ -478,6 +512,18 @@
                 context.font = "small-caps " + TEXT_FONT_SIZE + "px dejavu sans mono";
                 context.fillText(text, canvas.width / 2, canvas.height * 0.75);
                 textalpha -= (1.0 / TEXT_FADE_DURATION / FPS);
+            } else if (spaceship.dead) {
+                // Start a new game automatically
+                startNewGame();
+            }
+
+            // Show the amount of lives left the player has
+            var colourLife;
+
+            for (var i = 0; i < lives; i++) {
+
+                colourLife = isExploding && i == lives - 1 ? "red" : "white";
+                drawTriangularShip(SPACESHIP_SIZE + i * SPACESHIP_SIZE * 1.2, SPACESHIP_SIZE, 0.5 * Math.PI, colourLife);
             }
 
             // check if laser rays hit asteroids
