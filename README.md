@@ -15,3 +15,5 @@ Below is an overview of the controls used to steer the spaceship in the game.
 - **<kbd>←</kbd> Rotate Left**
 - **<kbd>→</kbd> Rotate Right**
 - **<kbd>Space</kbd> Shoot Lasers**
+
+## [Play now!](https://asi96.github.io/Asteroids/asteroidGame.html)
